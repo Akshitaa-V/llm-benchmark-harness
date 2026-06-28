@@ -33,8 +33,8 @@ change.
 """
 
 import time
+import requests
 from dataclasses import dataclass, field
-
 
 @dataclass
 class BenchmarkPrompt:
@@ -97,6 +97,23 @@ def mock_model_detailed(prompt: str) -> str:
     prompt_id = _match_prompt_id(prompt)
     return canned.get(prompt_id, "I don't know.")
 
+def ollama_model(prompt: str, model: str = "llama3.2:1b") -> str:
+    """
+    Calls a real, locally running Ollama model and returns its response.
+    Unlike the mock_model_* functions above, this makes an actual LLM call
+    over Ollama's local REST API (no API key, no cloud, fully offline).
+    Same input/output shape as the mock functions, so it drops into
+    MOCK_MODELS and the existing scoring/leaderboard code below without
+    any changes to run_benchmark() or print_leaderboard().
+    """
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        json={"model": model, "prompt": prompt, "stream": False},
+        timeout=120,
+    )
+    response.raise_for_status()
+    return response.json()["response"]
+
 
 def _match_prompt_id(prompt: str) -> str:
     for bp in BENCHMARK_SET:
@@ -104,13 +121,11 @@ def _match_prompt_id(prompt: str) -> str:
             return bp.prompt_id
     return ""
 
-
 MOCK_MODELS = {
     "mock-concise-v1": mock_model_concise,
     "mock-detailed-v1": mock_model_detailed,
+    "ollama-llama3.2-1b": ollama_model,
 }
-
-
 # --- Scoring ---
 
 
